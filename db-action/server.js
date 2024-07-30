@@ -37,7 +37,7 @@ app.get('/api/entries', async (req, res) => {
       ORDER BY id
     `)
 
-    res.status(200).json({ entries: entries.rows })
+    return res.status(200).json({ entries: entries.rows })
   } catch (e) {
     return res.status(500).json({ ok: false, msg: e.message })
   }
@@ -54,10 +54,16 @@ app.post('/api/add-entry', refresh, accessProtect, async (req, res) => {
       return res.status(400).json({ ok: false, msg: 'Price should be number' })
     }
 
+    const userId = req.user.id
+
+    if(!userId){
+      return res.status(401).json({ ok: false, msg: "There's no user id" })
+    }
+
     await client.query(`
-      INSERT INTO products (name, price, company_name)
-      VALUES ($1, $2, $3)
-    `, [name, price, company_name]);
+      INSERT INTO products (name, price, company_name, user_id)
+      VALUES ($1, $2, $3, $4)
+    `, [name, price, company_name, userId]);
 
     return res.status(201).json({ ok: true, msg: "SUCCESSFULLY CREATED!" })
   } catch (e) {
@@ -65,18 +71,24 @@ app.post('/api/add-entry', refresh, accessProtect, async (req, res) => {
   }
 })
 
-app.delete('/api/delete-entry/:idEntry', async (req, res) => {
+app.post('/api/delete-entry', refresh, accessProtect, async (req, res) => {
   try {
-    const { idEntry } = req.params
+    const { id } = req.body
 
-    if (!idEntry) {
-      return res.status(409).json({ ok: false, msg: 'Provide entry id' })
+    if (!id) {
+      return res.status(409).json({ ok: false, msg: 'Auth please' })
+    }
+    const userId = req.user.id
+
+    if(!userId){
+      return res.status(401).json({ ok: false, msg: "There's no user id" })
     }
 
+    
     await client.query(`
       DELETE FROM products
-      WHERE id = $1
-    `, [idEntry])
+      WHERE id = $1 AND user_id = $2
+    `, [id, userId])
 
     return res.status(200).json({ ok: true, msg: "SUCCESSFULLY DELETED!" })
   } catch (e) {
@@ -84,13 +96,12 @@ app.delete('/api/delete-entry/:idEntry', async (req, res) => {
   }
 })
 
-app.post('/api/update-entry/:idEntry', async (req, res) => {
+app.post('/api/update-entry', refresh, accessProtect, async (req, res) => {
   try {
-    const { name, price, company_name } = req.body
-    const { idEntry } = req.params
+    const { idEntry, name, price, company_name } = req.body
 
     if (!idEntry) {
-      return res.status(409).json({ ok: false, msg: 'Provide entry id' })
+      return res.status(409).json({ ok: false, msg: 'Provide product id' })
     }
     if (!name || !price || !company_name) {
       return res.status(400).json({ ok: false, msg: 'Provide the data!' })
@@ -99,11 +110,21 @@ app.post('/api/update-entry/:idEntry', async (req, res) => {
       return res.status(400).json({ ok: false, msg: 'Price should be number' })
     }
 
-    await client.query(`
+    const userId = req.user.id
+
+    if(!userId){
+      return res.status(401).json({ ok: false, msg: "There's no user id" })
+    }
+    const updated = await client.query(`
       UPDATE products 
-      SET name = $1, price = $2, company_name = $3)
-      WHERE id = $4
-    `, [name, price, company_name, idEntry]);
+      SET name = $1, price = $2, company_name = $3
+      WHERE id = $4 AND user_id = $5
+      RETURNING name
+    `, [name, price, company_name, idEntry, userId]);
+    
+    if(updated.rows.length === 0){
+      return res.status(201).json({ ok: true, msg: "Nothing to update." })
+    }
 
     return res.status(201).json({ ok: true, msg: "SUCCESSFULLY UPDATED!" })
   } catch (e) {

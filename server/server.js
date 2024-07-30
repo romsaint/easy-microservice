@@ -17,7 +17,7 @@ app.use(cors())
 
 app.get('/entries', async (req, res) => {
     try {
-        const entries = await axios.get('http://127.0.0.1:5001/api/entries')
+        const entries = await apiRequestDb.get('/api/entries')
 
         return res.status(200).json({ entries: entries.data })
     } catch (e) {
@@ -40,7 +40,44 @@ app.post('/add-entry', async (req, res) => {
 
         return res.status(response?.status || 201).json({ response: response.data })
     } catch (error) {
+        return res.status(error.response?.status || 500).json({ ok: false, msg: error.response?.data?.msg || error.message });
+    }
+})
 
+app.post('/delete-entry', async (req, res) => {
+    const { id } = req.body
+    try {
+        const response = await apiRequestDb.post('/api/delete-entry',
+            { id },
+            {
+                headers: {
+                    Cookie: req.headers.cookie
+                }
+            }
+        )
+
+        return res.status(response?.status || 201).json({ response: response.data })
+    } catch (error) {
+        console.log(error.message)
+        return res.status(error.response?.status || 500).json({ ok: false, msg: error.response?.data?.msg || error.message });
+    }
+})
+
+app.post('/update-entry', async (req, res) => {
+    const { idEntry, name, price, company_name } = req.body
+    try {
+        const response = await apiRequestDb.post('/api/update-entry',
+            { idEntry, name, price, company_name },
+            {
+                headers: {
+                    Cookie: req.headers.cookie
+                }
+            }
+        )
+
+        return res.status(response?.status || 201).json({ response: response.data })
+    } catch (error) {
+        console.log(error.message)
         return res.status(error.response?.status || 500).json({ ok: false, msg: error.response?.data?.msg || error.message });
     }
 })
@@ -56,6 +93,8 @@ app.post('/registration', async (req, res) => {
                 { maxAge: 2592000000, httpOnly: true, secure: true, sameSite: 'lax', domain: "127.0.0.1" }
             )
         }
+
+        req.user = { id: response.data.id }
 
         return res.status(response.status).json({ data: response?.data });
     } catch (error) {

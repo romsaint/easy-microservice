@@ -63,8 +63,9 @@ app.post('/api/registration', async (req, res) => {
             process.env.JWT_ACCESS_SECRET,
             { expiresIn: '30s' })
 
+        req.user = { id: createdUser.rows[0].id }
 
-        return res.status(201).json({ ok: true, accessToken, refreshToken, msg: "Successfully created!" })
+        return res.status(201).json({ ok: true, accessToken, refreshToken, msg: "Successfully created!", id: createdUser.rows[0].id })
     } catch (e) {
         if(e.code === '23505') return res.status(400).json({ ok: false, msg: "User already exists" })
         
