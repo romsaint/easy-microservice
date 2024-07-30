@@ -1,0 +1,15 @@
+{
+  "name": "mikro",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "s": "concurrently \" npm run server --prefix ./server\"  \" npm run db --prefix ./db-action\" \"npm run auth --prefix ./auth \""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
