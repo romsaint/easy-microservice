@@ -2,10 +2,9 @@ const jwt = require('jsonwebtoken')
 
 
 async function refresh(req, res, next){
-    
     try{
         const {refreshToken} = req.cookies
-        
+
         if(!refreshToken){
             return res.status(409).json({ok: false, msg: 'Provide refresh token'})
         }
@@ -20,9 +19,6 @@ async function refresh(req, res, next){
                 { expiresIn: '30s' })
               
             req.accessToken = accessToken
-            res.cookie('accessToken', accessToken, 
-                { maxAge: 30000, httpOnly: true, secure: true, sameSite: 'strict', domain: "127.0.0.1" }
-            )
 
             return next()
         } catch (err) {

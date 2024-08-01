@@ -2,7 +2,7 @@ const jwt = require('jsonwebtoken')
 
 
 async function accessProtect(req, res, next){
-    const accessToken = req.cookies.accessToken || req.accessToken
+    const accessToken = req.accessToken
     
     if(!accessToken){
         return res.status(409).json({ok: false, msg: 'Provide access token'})
