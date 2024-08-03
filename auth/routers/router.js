@@ -5,25 +5,10 @@ const jwt = require('jsonwebtoken')
 const validator = require('validator')
 const router = express.Router()
 
-const { Client } = require('pg')
 const { refresh } = require('../../server/utils/refreshToken')
 const { accessProtect } = require('../../server/utils/accessProtect')
 
-const client = new Client({
-    user: 'postgres',
-    host: 'localhost',
-    database: process.env.SECRET_DBNAME_POSTGRE_USERS,
-    password: process.env.SECRET_PASSWORD_POSTGRE,
-    port: 5432,
-});
-async function connect() {
-    try {
-        await client.connect();
-    } catch (err) {
-        console.error('Error', err.stack);
-    }
-}
-connect()
+const { Users } = require('../schemas/userSchema')
 
 
 router.post('/api/registration', async (req, res) => {
@@ -34,27 +19,24 @@ router.post('/api/registration', async (req, res) => {
             return res.status(409).json({ ok: false, msg: "Provide the data or check your password" })
         }
 
-        const isUserExists = await client.query(`
-        SELECT username FROM users
-        WHERE username = $1 AND password = $2
-    `, [username, password])
+        const isUserExists = await Users.findOne({where: {username}})
+
+        if(isUserExists){
+            return res.status(400).json({ ok: false, msg: "User already exists" })
+        }
 
         const hashedPassword = await bcrypt.hash(password, 10)
-        const createdUser = await client.query(`
-            INSERT INTO users (username, password)
-            VALUES ($1, $2)
-            RETURNING *
-        `, [username, hashedPassword])
+
+        const createdUser = await Users.create({username, password: hashedPassword}, {returning: true})
 
         const refreshToken = jwt.sign(
-            { user: { username: createdUser.rows[0].username, id: createdUser.rows[0].id } },
+            { user: { username: createdUser.username, id: createdUser.id } },
             process.env.JWT_REFRESH_SECRET,
             { expiresIn: '30d' })
 
-        return res.status(201).json({ ok: true, refreshToken, msg: "Successfully created!", id: createdUser.rows[0].id })
+        return res.status(201).json({ ok: true, refreshToken, msg: "Successfully created!", id: createdUser.id })
     } catch (e) {
-        if (e.code === '23505') return res.status(400).json({ ok: false, msg: "User already exists" })
-
+        console.log(e)
         return res.status(e.response?.status || 500).json({ ok: false, msg: e.message })
     }
 })
@@ -67,28 +49,24 @@ router.post('/api/login', async (req, res) => {
             return res.status(409).json({ ok: false, msg: "Provide the data or check your password" })
         }
 
-        const isUserExists = await client.query(`
-            SELECT * FROM users
-            WHERE username = $1`,
-            [username]
-        )
+        const isUserExists = await Users.findOne({where: {username}})
 
-        if (isUserExists.rowCount === 0) {
+        if (isUserExists) {
             return res.status(400).json({ ok: false, msg: "User doesn't exists." })
         }
 
-        const isPasswordValid = await bcrypt.compare(password, isUserExists.rows[0].password)
+        const isPasswordValid = await bcrypt.compare(password, isUserExists.password)
         if (!isPasswordValid) {
             return res.status(400).json({ ok: false, msg: "Wrong password." })
         }
 
         const refreshToken = jwt.sign(
-            { user: { username: isUserExists.rows[0].username, id: isUserExists.rows[0].id } },
+            { user: { username: isUserExists.username, id: isUserExists.id } },
             process.env.JWT_REFRESH_SECRET,
             { expiresIn: '30d' }
         )
 
-        return res.status(201).json({ ok: true, refreshToken, msg: "Successfully log in!", id: isUserExists.rows[0].id })
+        return res.status(201).json({ ok: true, refreshToken, msg: "Successfully log in!", id: isUserExists.id })
 
     } catch (e) {
         return res.status(e.response?.status || 500).json({ ok: false, msg: e.message })
@@ -96,13 +74,13 @@ router.post('/api/login', async (req, res) => {
 })
 
 router.get('/api/logout', refresh, accessProtect, async (req, res) => {
-    try{
+    try {
         res.clearCookie('refreshToken', {
             secure: true, httpOnly: true, sameSite: 'strict', maxAge: 2592000000
         })
         req.accessToken = null
 
-        return res.status(200).json({ok: true, msg: "Successfully logout"})
+        return res.status(200).json({ ok: true, msg: "Successfully logout" })
     } catch (e) {
         return res.status(e.response?.status || 500).json({ ok: false, msg: e.message })
     }
@@ -113,4 +91,4 @@ router.get('/api/protect-route', refresh, accessProtect, async (req, res) => {
 })
 
 
-module.exports = {router}
+module.exports = { router }

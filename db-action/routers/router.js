@@ -4,64 +4,46 @@ const router = express.Router()
 const { accessProtect } = require('../../server/utils/accessProtect')
 const { refresh } = require('../../server/utils/refreshToken')
 
-const { Client } = require('pg');
-const client = new Client({
-  user: 'postgres',
-  host: 'localhost',
-  database: process.env.SECRET_DBNAME_POSTGRE_DB,
-  password: process.env.SECRET_PASSWORD_POSTGRE,
-  port: 5432,
-});
-async function connect() {
-  try {
-    await client.connect();
-  } catch (err) {
-    console.error('Error', err.stack);
-  }
-}
-connect()
+const { Products } = require('../schemes/productsSchema')
 
 
 router.get('/api/entries', async (req, res) => {
   try {
-    const entries = await client.query(`
-      SELECT * FROM products
-      ORDER BY id
-    `)
+    const entries = await Products.findAll()
 
-    return res.status(200).json({ entries: entries.rows })
+    return res.status(200).json({ entries })
   } catch (e) {
     return res.status(500).json({ ok: false, msg: e.message })
   }
 });
-
 router.post('/api/add-entry', refresh, accessProtect, async (req, res) => {
   try {
-    const { name, price, company_name } = req.body
- 
+    const { name, price, company_name } = req.body;
+
     if (!name || !price || !company_name) {
-      return res.status(400).json({ ok: false, msg: 'Provide the data!' })
+      return res.status(400).json({ ok: false, msg: 'Provide the data!' });
     }
     if (typeof price !== 'number') {
-      return res.status(400).json({ ok: false, msg: 'Price should be number' })
+      return res.status(400).json({ ok: false, msg: 'Price should be number' });
     }
 
-    const userId = req.user.id
+    const userId = req.user.id;
 
-    if(!userId){
-      return res.status(401).json({ ok: false, msg: "There's no user id" })
+    if (!userId) {
+      return res.status(401).json({ ok: false, msg: "There's no user id" });
     }
 
-    await client.query(`
-      INSERT INTO products (name, price, company_name, user_id)
-      VALUES ($1, $2, $3, $4)
-    `, [name, price, company_name, userId]);
+    await Products.create({ name, price, company_name, user_id: userId });
 
-    return res.status(201).json({ ok: true, msg: "SUCCESSFULLY CREATED!" })
+    return res.status(201).json({ ok: true, msg: "SUCCESSFULLY CREATED!" });
   } catch (e) {
-    return res.status(500).json({ ok: false, msg: e.message })
+    console.error('Detailed Error:', e); // Log the detailed error
+    if (e.original && e.original.code === '23503') {
+      return res.status(500).json({ ok: false, msg: "There's no such company name" });
+    }
+    return res.status(500).json({ ok: false, msg: e.message });
   }
-})
+});
 
 router.post('/api/delete-entry', refresh, accessProtect, async (req, res) => {
   try {
@@ -72,17 +54,19 @@ router.post('/api/delete-entry', refresh, accessProtect, async (req, res) => {
     }
     const userId = req.user.id
 
-    if(!userId){
+    if (!userId) {
       return res.status(401).json({ ok: false, msg: "There's no user id" })
     }
 
-    const deleted = await client.query(`
-      DELETE FROM products
-      WHERE id = $1 AND user_id = $2
-      RETURNING *
-    `, [id, userId])
-    
-    if(deleted.rowCount === 0){
+    const deleted = await Products.findOne({
+      where: {
+        id,
+        user_id: userId
+      }
+    })
+    if (deleted) {
+      await deleted.destroy()
+    }else{
       return res.status(400).json({ ok: true, msg: "Nothing to delete." })
     }
 
@@ -108,17 +92,21 @@ router.post('/api/update-entry', refresh, accessProtect, async (req, res) => {
 
     const userId = req.user.id
 
-    if(!userId){
+    if (!userId) {
       return res.status(401).json({ ok: false, msg: "There's no user id" })
     }
-    const updated = await client.query(`
-      UPDATE products 
-      SET name = $1, price = $2, company_name = $3
-      WHERE id = $4 AND user_id = $5
-      RETURNING name
-    `, [name, price, company_name, idEntry, userId]);
-    
-    if(updated.rows.length === 0){
+
+    const updated = await Products.update({
+      name, price, company_name
+    }, {
+      where: {
+        id: idEntry,
+        user_id: userId
+      },
+      returning: true
+    })
+
+    if (!updated) {
       return res.status(400).json({ ok: true, msg: "Nothing to update." })
     }
 
@@ -129,4 +117,4 @@ router.post('/api/update-entry', refresh, accessProtect, async (req, res) => {
 })
 
 
-module.exports = {router}
+module.exports = { router }
