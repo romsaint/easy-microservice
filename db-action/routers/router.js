@@ -75,7 +75,7 @@ router.post('/api/delete-entry', refresh, accessProtect, async (req, res) => {
     if(!userId){
       return res.status(401).json({ ok: false, msg: "There's no user id" })
     }
-
+    
     const deleted = await client.query(`
       DELETE FROM products
       WHERE id = $1 AND user_id = $2
