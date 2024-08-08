@@ -2,9 +2,10 @@ const express = require('express')
 const app = express()
 const cookieParser = require('cookie-parser')
 const cors = require('cors')
-
+const helmet = require('helmet')
 const { router } = require('./routers/router')
 
+app.use(helmet())
 app.use(express.json())
 app.use(express.urlencoded({ extended: false }))
 app.use(cookieParser())

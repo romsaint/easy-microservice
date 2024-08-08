@@ -112,5 +112,55 @@ router.get('/api/protect-route', refresh, accessProtect, async (req, res) => {
     return res.status(200).json({ ok: true, msg: 'NICE' })
 })
 
+router.post('/api/oauth', async (req, res) => {
+    const redirectUri = 'http://127.0.0.1:5002/api/oauth/redirect'
+    const oauth = new OAuth2Client({
+        clientId: process.env.GOOGLE_SECRET_ID, clientSecret: process.env.GOOGLE_SECRET_SECRET, redirectUri
+    })
+
+    const url = oauth.generateAuthUrl({
+        access_type: 'offline',
+        scope: "https://www.googleapis.com/auth/userinfo.profile",
+        prompt: "consent"
+    })
+    
+
+    return res.status(200).json({ ok: true, url })
+})
+
+async function getDataOauth(accessToken){
+    try{
+        const res = await axios.get(`https://www.googleapis.com/oauth2/v3/userinfo?access_token=${accessToken}`)
+
+        return res.data
+    }catch(e){
+        return res.status(e.response?.status || 500).json({ ok: false, msg: e.message })
+    }
+} 
+
+router.get('/api/oauth/redirect', async (req, res) => {
+    const code = req.query.code
+
+    try{
+        if(code){
+            const redirectUri = 'http://127.0.0.1:5002/api/oauth/redirect'
+            const oauth = new OAuth2Client({
+                clientId: process.env.GOOGLE_SECRET_ID, clientSecret: process.env.GOOGLE_SECRET_SECRET, redirectUri
+            })
+
+            const {tokens} = await oauth.getToken(code)
+            await oauth.setCredentials(tokens)
+
+            const userData = await getDataOauth(tokens.access_token)
+
+            return res.status(200).json({ok: true, userData})
+        }
+
+        return res.status(200).json({ok: false, msg: "There's no code"})
+    }catch(e){
+        return res.status(e.response?.status || 500).json({ ok: false, msg: e.message })
+    }
+})
+
 
 module.exports = {router}
