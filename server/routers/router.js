@@ -29,6 +29,7 @@ router.post('/add-entry', async (req, res) => {
 
         return res.status(response?.status || 201).json({ response: response.data })
     } catch (error) {
+        
         return res.status(error.response?.status || 500).json({ ok: false, msg: error.response?.data?.msg || error.message });
     }
 })
