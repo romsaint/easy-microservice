@@ -4,8 +4,8 @@ const router = express.Router()
 const { accessProtect } = require('../../server/utils/accessProtect')
 const { refresh } = require('../../server/utils/refreshToken')
 
-const { Client } = require('pg');
-const client = new Client({
+const { Pool } = require('pg');
+const client = new Pool({
   user: 'postgres',
   host: 'localhost',
   database: process.env.SECRET_DBNAME_POSTGRE_DB,
@@ -128,5 +128,23 @@ router.post('/api/update-entry', refresh, accessProtect, async (req, res) => {
   }
 })
 
+
+router.get('/api/test/transactions', refresh, accessProtect, async (req, res) => {
+  try{
+    const userId = req.user.id
+
+    await client.query('BEGIN')
+
+    const trans1 = await client.query("INSERT INTO products (name, price, company_name, user_id) VALUES ($1, $2, $3, $4)", ['test1', 1, '1', userId])
+    const trans2 = await client.query("INSERT INTO products (name, price, company_name, user_id) VALUES ($1, $2, $3, $4)", ['test2', 1, '1', userId - 1])
+
+    await client.query('COMMIT')
+
+    return res.status(201).json({ ok: true, msg: "SUCCESSFULLY!" })
+  }catch(e){
+    await client.query('ROLLBACK')
+    return res.status(500).json({ ok: false, msg: e.message })
+  }
+})
 
 module.exports = {router}

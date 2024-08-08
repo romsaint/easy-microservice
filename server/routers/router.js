@@ -1,8 +1,8 @@
 require('dotenv').config();
 const express = require('express')
-const { apiRequestDb, apiRequestAuth  } = require('../utils/apiRequests')
+const { apiRequestDb, apiRequestAuth } = require('../utils/apiRequests')
 const router = express.Router()
-
+const axios = require('axios')
 
 router.get('/entries', async (req, res) => {
     try {
