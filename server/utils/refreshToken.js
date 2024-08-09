@@ -11,7 +11,7 @@ async function refresh(req, res, next) {
         try {
 
             const decoded = await jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
-
+            console.log(decoded)
             const accessToken = jwt.sign(
                 { user: { username: decoded.user.username, id: decoded.user.id } },
                 process.env.JWT_ACCESS_SECRET,

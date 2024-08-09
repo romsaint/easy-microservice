@@ -29,7 +29,7 @@ router.post('/add-entry', async (req, res) => {
 
         return res.status(response?.status || 201).json({ response: response.data })
     } catch (error) {
-        
+
         return res.status(error.response?.status || 500).json({ ok: false, msg: error.response?.data?.msg || error.message });
     }
 })
@@ -48,7 +48,7 @@ router.post('/delete-entry', async (req, res) => {
 
         return res.status(response?.status || 201).json({ response: response.data })
     } catch (error) {
-        console.log(error.message)
+      
         return res.status(error.response?.status || 500).json({ ok: false, msg: error.response?.data?.msg || error.message });
     }
 })
@@ -67,7 +67,7 @@ router.post('/update-entry', async (req, res) => {
 
         return res.status(response?.status || 201).json({ response: response.data })
     } catch (error) {
-        console.log(error.message)
+
         return res.status(error.response?.status || 500).json({ ok: false, msg: error.response?.data?.msg || error.message });
     }
 })
@@ -143,10 +143,38 @@ router.get('/protect-route', async (req, res) => {
 
         return res.status(200).json({ data: response.data });
     } catch (error) {
-        console.log(error)
+
         return res.status(error.response?.status || 500).json({ ok: false, msg: error.response?.data?.msg || error.message });
     }
 });
+
+
+router.post('/oauth', async (rqe, res) => {
+    try {
+        const response = await apiRequestAuth.post('/api/oauth')
+        
+        return res.status(response.status).json({ response: response.data })
+     } catch (error) {
+        return res.status(error.response?.status || 500).json({ ok: false, msg: error.response?.data?.msg || error.message });
+    }
+})
+
+router.get('/oauth/redirect', async (req, res) => {
+    try {
+        const response = await apiRequestAuth.get(`/api/oauth/redirect?code=${req.query.code}`)
+
+        res.cookie('refreshToken', response.data.refreshToken,
+            { maxAge: 2592000000, httpOnly: true, secure: true, sameSite: 'strict' }
+        )
+
+        req.user = { id: response.data.id }
+        
+
+        return res.status(response.status || 200).json({ response: response.data })
+     } catch (error) {
+        return res.status(error.response?.status || 500).json({ ok: false, msg: error.response?.data?.msg || error.message });
+    }
+})
 
 
 module.exports = { router }
