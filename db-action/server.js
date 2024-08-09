@@ -3,7 +3,6 @@ const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const { router } = require('./routers/router'); // Убедитесь, что путь правильный
 const helmet = require('helmet')
-
 const app = express();
 
 app.use(helmet())
@@ -14,7 +13,6 @@ app.use(cors({
   origin: "http://127.0.0.1:5000",
   credentials: true
 }));
-
 
 app.use(router);
 

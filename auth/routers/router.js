@@ -3,11 +3,19 @@ const express = require('express')
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
 const validator = require('validator')
-const router = express.Router()
-
 const { Client } = require('pg')
+const {OAuth2Client} = require('google-auth-library')
+const axios = require('axios')
+
+const router = express.Router()
 const { refresh } = require('../../server/utils/refreshToken')
 const { accessProtect } = require('../../server/utils/accessProtect')
+
+const {Worker, parentPort, isMainThread, workerData} = require('worker_threads')
+const os = require('os')
+const path = require('path')
+const fs = require('fs');
+
 
 const client = new Client({
     user: 'postgres',
@@ -34,27 +42,24 @@ router.post('/api/registration', async (req, res) => {
             return res.status(409).json({ ok: false, msg: "Provide the data or check your password" })
         }
 
-        const isUserExists = await client.query(`
-        SELECT username FROM users
-        WHERE username = $1 AND password = $2
-    `, [username, password])
+        const isUserExists = await Users.findOne({where: {username}})
+
+        if(isUserExists){
+            return res.status(400).json({ ok: false, msg: "User already exists" })
+        }
 
         const hashedPassword = await bcrypt.hash(password, 10)
-        const createdUser = await client.query(`
-            INSERT INTO users (username, password)
-            VALUES ($1, $2)
-            RETURNING *
-        `, [username, hashedPassword])
+
+        const createdUser = await Users.create({username, password: hashedPassword}, {returning: true})
 
         const refreshToken = jwt.sign(
-            { user: { username: createdUser.rows[0].username, id: createdUser.rows[0].id } },
+            { user: { username: createdUser.username, id: createdUser.id } },
             process.env.JWT_REFRESH_SECRET,
             { expiresIn: '30d' })
 
-        return res.status(201).json({ ok: true, refreshToken, msg: "Successfully created!", id: createdUser.rows[0].id })
+        return res.status(201).json({ ok: true, refreshToken, msg: "Successfully created!", id: createdUser.id })
     } catch (e) {
-        if (e.code === '23505') return res.status(400).json({ ok: false, msg: "User already exists" })
-
+        console.log(e)
         return res.status(e.response?.status || 500).json({ ok: false, msg: e.message })
     }
 })
@@ -67,28 +72,24 @@ router.post('/api/login', async (req, res) => {
             return res.status(409).json({ ok: false, msg: "Provide the data or check your password" })
         }
 
-        const isUserExists = await client.query(`
-            SELECT * FROM users
-            WHERE username = $1`,
-            [username]
-        )
+        const isUserExists = await Users.findOne({where: {username}})
 
-        if (isUserExists.rowCount === 0) {
+        if (isUserExists) {
             return res.status(400).json({ ok: false, msg: "User doesn't exists." })
         }
 
-        const isPasswordValid = await bcrypt.compare(password, isUserExists.rows[0].password)
+        const isPasswordValid = await bcrypt.compare(password, isUserExists.password)
         if (!isPasswordValid) {
             return res.status(400).json({ ok: false, msg: "Wrong password." })
         }
 
         const refreshToken = jwt.sign(
-            { user: { username: isUserExists.rows[0].username, id: isUserExists.rows[0].id } },
+            { user: { username: isUserExists.username, id: isUserExists.id } },
             process.env.JWT_REFRESH_SECRET,
             { expiresIn: '30d' }
         )
 
-        return res.status(201).json({ ok: true, refreshToken, msg: "Successfully log in!", id: isUserExists.rows[0].id })
+        return res.status(201).json({ ok: true, refreshToken, msg: "Successfully log in!", id: isUserExists.id })
 
     } catch (e) {
         return res.status(e.response?.status || 500).json({ ok: false, msg: e.message })
@@ -96,13 +97,13 @@ router.post('/api/login', async (req, res) => {
 })
 
 router.get('/api/logout', refresh, accessProtect, async (req, res) => {
-    try{
+    try {
         res.clearCookie('refreshToken', {
             secure: true, httpOnly: true, sameSite: 'strict', maxAge: 2592000000
         })
         req.accessToken = null
 
-        return res.status(200).json({ok: true, msg: "Successfully logout"})
+        return res.status(200).json({ ok: true, msg: "Successfully logout" })
     } catch (e) {
         return res.status(e.response?.status || 500).json({ ok: false, msg: e.message })
     }
@@ -161,6 +162,58 @@ router.get('/api/oauth/redirect', async (req, res) => {
         return res.status(e.response?.status || 500).json({ ok: false, msg: e.message })
     }
 })
+
+
+router.post('/api/oauth', async (req, res) => {
+    const redirectUri = 'http://127.0.0.1:5002/api/oauth/redirect'
+    const oauth = new OAuth2Client({
+        clientId: process.env.GOOGLE_SECRET_ID, clientSecret: process.env.GOOGLE_SECRET_SECRET, redirectUri
+    })
+
+    const url = oauth.generateAuthUrl({
+        access_type: 'offline',
+        scope: "https://www.googleapis.com/auth/userinfo.profile",
+        prompt: "consent"
+    })
+    
+
+    return res.status(200).json({ ok: true, url })
+})
+
+async function getDataOauth(accessToken){
+    try{
+        const res = await axios.get(`https://www.googleapis.com/oauth2/v3/userinfo?access_token=${accessToken}`)
+
+        return res.data
+    }catch(e){
+        return res.status(e.response?.status || 500).json({ ok: false, msg: e.message })
+    }
+} 
+
+router.get('/api/oauth/redirect', async (req, res) => {
+    const code = req.query.code
+
+    try{
+        if(code){
+            const redirectUri = 'http://127.0.0.1:5002/api/oauth/redirect'
+            const oauth = new OAuth2Client({
+                clientId: process.env.GOOGLE_SECRET_ID, clientSecret: process.env.GOOGLE_SECRET_SECRET, redirectUri
+            })
+
+            const {tokens} = await oauth.getToken(code)
+            await oauth.setCredentials(tokens)
+
+            const userData = await getDataOauth(tokens.access_token)
+
+            return res.status(200).json({ok: true, userData})
+        }
+
+        return res.status(200).json({ok: false, msg: "There's no code"})
+    }catch(e){
+        return res.status(e.response?.status || 500).json({ ok: false, msg: e.message })
+    }
+})
+
 
 
 module.exports = {router}

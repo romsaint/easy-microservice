@@ -1,8 +1,8 @@
 require('dotenv').config();
 const express = require('express')
-const { apiRequestDb, apiRequestAuth  } = require('../utils/apiRequests')
+const { apiRequestDb, apiRequestAuth } = require('../utils/apiRequests')
 const router = express.Router()
-
+const axios = require('axios')
 
 router.get('/entries', async (req, res) => {
     try {
@@ -29,6 +29,7 @@ router.post('/add-entry', async (req, res) => {
 
         return res.status(response?.status || 201).json({ response: response.data })
     } catch (error) {
+        
         return res.status(error.response?.status || 500).json({ ok: false, msg: error.response?.data?.msg || error.message });
     }
 })
